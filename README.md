@@ -59,6 +59,13 @@ Add your Adgeist publisher ID (as identified in the Adgeist web interface) to yo
 
 Every ad request is attributed to this ID, and the request `Origin` is your app's bundle identifier — both must match what is registered in the Adgeist dashboard.
 
+`NSUserTrackingUsageDescription` is required when the app requests tracking authorisation, whether through STEP 4 or through `ATTrackingManager` directly. The system terminates apps that use the AppTrackingTransparency framework without it.
+
+```xml
+<key>NSUserTrackingUsageDescription</key>
+<string>YOUR_REASON</string>
+```
+
 ### STEP 3: Initialize the Adgeist Mobile Ads SDK
 
 Call `AdgeistCore.shared.initialize()` as early as possible in your app's lifecycle. It warms the web view, the network connection, and the render assets so the first ad paints faster.
@@ -95,6 +102,20 @@ func application(
 ```
 
 Initialization is a warm-up only. Ads load without it, just more slowly on first paint.
+
+### STEP 4: Request tracking authorisation (optional)
+
+Authorised tracking improves targeting. Ads serve without it.
+
+```swift
+let authorised = await AdgeistCore.shared.requestAdTrackingAutorisation()
+```
+
+Returns `true` when tracking is authorised. The system prompt is presented only while the app is active and authorisation is undetermined.
+
+Apps that call `ATTrackingManager.requestTrackingAuthorization` directly must not call this method. The SDK uses the authorisation status already established by the app.
+
+Authorisation is resolved once per launch, so call this before the first ad loads.
 
 ## Display an ad
 
