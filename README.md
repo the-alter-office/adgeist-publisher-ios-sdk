@@ -184,7 +184,7 @@ final class FeedViewController: UIViewController {
 }
 ```
 
-`AdView` supplies its own intrinsic content size, so do not pin its width or height — constrain position only and let the ad size itself.
+`AdView` supplies its own intrinsic content size for fixed-size ads — constrain position only. For responsive ads, constrain the axes you did not pass (`width`/`height`) to the parent.
 
 `AdView` is `@MainActor`; create it and call `load()` from the main thread. It has no `init(coder:)`, so it cannot be placed in a storyboard or xib — construct it in code.
 
@@ -194,13 +194,73 @@ final class FeedViewController: UIViewController {
 | -------------- | -------------------------------------------------------------- |
 | `width`        | Fallback width, used only if the server returns no dimensions  |
 | `height`       | Fallback height, used only if the server returns no dimensions |
-| `reserveSpace` | Occupies `width` × `height` until the ad resolves              |
+| `reserveSpace` | Occupies the requested size until the ad resolves              |
 
 Dimensions returned by the server always win. The `width` and `height` you pass are a fallback for the case where the response carries none.
 
-With `reserveSpace: false` (the default) the view has zero size until the ad resolves, then grows to fit — surrounding content shifts. With `reserveSpace: true` the view claims `width` × `height` immediately, so the layout is stable from first render. `reserveSpace` requires both `width` and `height`.
+Each axis is independent: an axis without `width`/`height` fills its parent.
 
-If the server returns no dimensions and you passed no `width`/`height`, the ad has no size and will not be visible.
+> **Responsive ads:** In a `VStack` or vertical `ScrollView`, pass `height`. In an `HStack` or horizontal `ScrollView`, pass `width`.
+
+With `reserveSpace: false` (the default) the view has zero size until the ad resolves, then grows to fit — surrounding content shifts. With `reserveSpace: true` the view claims the requested size immediately; any axis without a value fills its parent.
+
+If a non-responsive ad returns no dimensions and you passed no `width`/`height`, the ad fills its parent and the SDK emits an `AW1` warning.
+
+## Ad events
+
+Pass `onEvent` to receive ad events. It is optional and called on the main thread.
+
+### SwiftUI
+
+```swift
+AdBanner(adId: "YOUR_AD_SPACE_ID", onEvent: { event in
+    switch event.type {
+    case .adLoaded: break
+    case .adClicked: break
+    case .adNoFill: break
+    case .adNetworkError: break
+    case .adWarning: break
+    }
+})
+```
+
+### UIKit
+
+Set `onEvent` before calling `load()`.
+
+```swift
+adView.onEvent = { event in
+    print(event.code, event.type.rawValue, event.message)
+}
+adView.load()
+```
+
+### Event payload
+
+| Field     | Type                | Description                              |
+| --------- | ------------------- | ---------------------------------------- |
+| `code`    | `String`            | SDK reference code, e.g. `AE1`           |
+| `type`    | `AdgeistEventType`  | Event kind, e.g. `AD_NO_FILL`            |
+| `message` | `String`            | Human-readable description               |
+| `data`    | `[String: String]?` | Extra details; `reason` on load failures |
+
+`data.reason` is the underlying error description, and its text may be localized. Use it for diagnostics only; match on `code` or `type`.
+
+Code prefixes: `AL` lifecycle, `AI` interaction, `AE` error, `AW` warning.
+
+### Event reference
+
+| Code | type               | Meaning                | When it occurs                  | Possible cause                                                   | Recommended action                            |
+| ---- | ------------------ | ---------------------- | ------------------------------- | ---------------------------------------------------------------- | --------------------------------------------- |
+| AL1  | `AD_LOADED`        | Ad loaded successfully | Creative rendered               | —                                                                | —                                             |
+| AI1  | `AD_CLICKED`       | Ad clicked             | User taps the ad                | —                                                                | —                                             |
+| AE1  | `AD_NO_FILL`       | No ad available        | Server returns no ad            | No active campaign for the ad space                              | Hide the placement                            |
+| AE2  | `AD_NETWORK_ERROR` | Ad request failed      | Ad request does not complete    | Device offline, timeout, or server error                         | Retry later                                   |
+| AW1  | `AD_WARNING`       | Ad has no size         | After the ad response           | Server returned no dimensions and no `width`/`height` was passed | Pass `width` and `height`                     |
+| AW2  | `AD_WARNING`       | Invalid configuration  | Before or during the ad request | Missing `ADGEIST_APP_ID`, or request rejected (HTTP 4xx)         | Check `Info.plist` and the ad space ID        |
+| AW3  | `AD_WARNING`       | Ad failed to render    | While rendering the creative    | Invalid creative or web view error                               | Contact support with `code` and `data.reason` |
+
+A load cancelled by a new `load()` call emits no event.
 
 ---
 
