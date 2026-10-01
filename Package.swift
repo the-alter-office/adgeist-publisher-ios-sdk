@@ -15,8 +15,8 @@ let package = Package(
     targets: [
         .binaryTarget(
             name: "AdgeistKit",
-            url: "https://github.com/the-alter-office/adgeist-publisher-ios-sdk/releases/download/1.0.22/AdgeistKit.xcframework.zip",
-            checksum: "bef8ec89a969f932d0e67e45fede83ac4b130a839da7161c6ea00950a407d374"
+            url: "https://github.com/the-alter-office/adgeist-publisher-ios-sdk/releases/download/1.0.24-beta.1/AdgeistKit.xcframework.zip",
+            checksum: "4e3cbd18fc4146eda7759a5ab35b8c2475e744df2681aae4831c7f6c421ce4e1"
         )
     ]
 )
