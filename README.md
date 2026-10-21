@@ -4,52 +4,34 @@
 
 # Adgeist Mobile Ads SDK for iOS
 
-This guide is for publishers who want to monetize an iOS app with Adgeist.
+AdgeistKit is a binary Swift package with no dependencies of its own. It works with SwiftUI and UIKit, and needs Xcode 16 and iOS 15.6 or later.
 
-## Prerequisites
+Before ads will serve you need an Adgeist publisher account with your bundle ID whitelisted.
 
-- Xcode 16.0 or higher
-- Deployment target of iOS 15.6 or higher
-- An Adgeist publisher account with your bundle ID whitelisted
+## Install
 
-## Configure your app
-
-### STEP 1: Add the dependency
-
-AdgeistKit is distributed as a binary Swift package. It has no dependencies of its own.
-
-#### Method 1: Xcode
-
-1. File → Add Package Dependencies.
-2. Enter the package URL:
+In Xcode, **File → Add Package Dependencies**, paste the URL, pick **Up to Next Major Version** from the latest release, and add **AdgeistKit** to your app target.
 
 ```
 https://github.com/the-alter-office/adgeist-publisher-ios-sdk
 ```
 
-3. Choose **Up to Next Major Version** from the latest release.
-4. Add the `AdgeistKit` library to your app target.
-
-#### Method 2: Package.swift
-
-1. Add the package to your `dependencies`:
+Or in `Package.swift`:
 
 ```swift
 .package(
     url: "https://github.com/the-alter-office/adgeist-publisher-ios-sdk.git",
-    from: "1.0.18"
+    from: "1.0.25"
 )
 ```
-
-2. Add the product to the target that uses it:
 
 ```swift
 .product(name: "AdgeistKit", package: "adgeist-publisher-ios-sdk")
 ```
 
-### STEP 2: Configure Info.plist
+## Configure
 
-Add your Adgeist publisher ID (as identified in the Adgeist web interface) to your app's `Info.plist` under the key `ADGEIST_APP_ID`:
+Your publisher ID goes in `Info.plist` under `ADGEIST_APP_ID`. You'll find it in the Adgeist web interface.
 
 ```xml
 <!-- Sample Adgeist app ID: 69326f9fbb280f9241cabc94 -->
@@ -57,23 +39,15 @@ Add your Adgeist publisher ID (as identified in the Adgeist web interface) to yo
 <string>YOUR_ADGEIST_ID</string>
 ```
 
-Every ad request is attributed to this ID, and the request `Origin` is your app's bundle identifier — both must match what is registered in the Adgeist dashboard.
+Every ad request is attributed to that ID and carries your bundle identifier as its `Origin`. Both have to match what's registered in the dashboard. If either doesn't, the request is rejected and you get an `AW2` warning back.
 
-`NSUserTrackingUsageDescription` is required when the app requests tracking authorisation, whether through STEP 4 or through `ATTrackingManager` directly. The system terminates apps that use the AppTrackingTransparency framework without it.
+No `ADGEIST_APP_ID` yet? You can still build against the SDK. [Preview](#preview) renders real ad layouts locally without an ID, an ad space or a network call, so the integration work doesn't have to wait on the dashboard.
 
-```xml
-<key>NSUserTrackingUsageDescription</key>
-<string>YOUR_REASON</string>
-```
+## Initialize
 
-### STEP 3: Initialize the Adgeist Mobile Ads SDK
-
-Call `AdgeistCore.shared.initialize()` as early as possible in your app's lifecycle. It warms the web view, the network connection, and the render assets so the first ad paints faster.
+Call `AdgeistCore.shared.initialize()` at launch, as early in the lifecycle as you can. It warms the web view, the network connection and the render assets so your first ad paints faster.
 
 ```swift
-import SwiftUI
-import AdgeistKit
-
 @main
 struct MyApp: App {
 
@@ -89,7 +63,7 @@ struct MyApp: App {
 }
 ```
 
-From `UIApplicationDelegate`:
+From an app delegate:
 
 ```swift
 func application(
@@ -101,29 +75,9 @@ func application(
 }
 ```
 
-Initialization is a warm-up only. Ads load without it, just more slowly on first paint.
+## Show an ad
 
-### STEP 4: Request tracking authorisation (optional)
-
-Authorised tracking improves targeting. Ads serve without it.
-
-```swift
-let authorised = await AdgeistCore.shared.requestAdTrackingAutorisation()
-```
-
-Returns `true` when tracking is authorised. The system prompt is presented only while the app is active and authorisation is undetermined.
-
-Apps that call `ATTrackingManager.requestTrackingAuthorization` directly must not call this method. The SDK uses the authorisation status already established by the app.
-
-Authorisation is resolved once per launch, so call this before the first ad loads.
-
-## Display an ad
-
-An ad space is identified by the ad space ID you created in the Adgeist dashboard. The format — banner, display, or companion — is configured server side and resolved at request time; you do not declare it in the app.
-
-### SwiftUI
-
-Place an `AdBanner` in your hierarchy. It loads itself when it appears.
+In SwiftUI, `AdBanner` loads itself when it appears. Only `adId` is required:
 
 ```swift
 import SwiftUI
@@ -135,9 +89,13 @@ struct FeedView: View {
             VStack(spacing: 24) {
                 Text("Sponsored")
 
-                AdBanner(adId: "YOUR_AD_SPACE_ID")
-
-                // your content
+                AdBanner(
+                    adId: "YOUR_AD_SPACE_ID",
+                    width: 320,                      // CGFloat? = nil
+                    height: 300,                     // CGFloat? = nil
+                    reserveSpace: true,              // Bool = false
+                    onEvent: { event in print(event.code) }
+                )
             }
             .padding()
         }
@@ -145,20 +103,7 @@ struct FeedView: View {
 }
 ```
 
-To hold layout space while the ad is in flight, pass a size and `reserveSpace: true`:
-
-```swift
-AdBanner(
-    adId: "YOUR_AD_SPACE_ID",
-    width: 320,
-    height: 300,
-    reserveSpace: true
-)
-```
-
-### UIKit
-
-Create an `AdView`, add it to your hierarchy, then call `load()`.
+In UIKit, you set `onEvent` as a property and call `load()` yourself:
 
 ```swift
 import UIKit
@@ -166,7 +111,12 @@ import AdgeistKit
 
 final class FeedViewController: UIViewController {
 
-    private let adView = AdView(adUnitId: "YOUR_AD_SPACE_ID")
+    private let adView = AdView(
+        adId: "YOUR_AD_SPACE_ID",
+        width: 320,                                 // CGFloat? = nil
+        height: 300,                                // CGFloat? = nil
+        reserveSpace: true                          // Bool = false
+    )
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -179,38 +129,126 @@ final class FeedViewController: UIViewController {
             adView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor)
         ])
 
+        adView.onEvent = { event in print(event.code) }
+
         adView.load()
     }
 }
 ```
 
-`AdView` supplies its own intrinsic content size for fixed-size ads — constrain position only. For responsive ads, constrain the axes you did not pass (`width`/`height`) to the parent.
+`AdView` is `@MainActor` and has no `init(coder:)`, so build it in code and keep it off your storyboards.
 
-`AdView` is `@MainActor`; create it and call `load()` from the main thread. It has no `init(coder:)`, so it cannot be placed in a storyboard or xib — construct it in code.
+That's the whole surface, apart from these:
+
+```swift
+AdgeistCore.shared.initialize()
+await AdgeistCore.shared.requestAdTrackingAutorisation()    // -> Bool
+
+struct AdgeistEvent {
+    let code: String            // "AE1" and friends
+    let type: AdgeistEventType  // .adLoaded | .adClicked | .adNoFill | .adNetworkError | .adWarning
+    let message: String
+    let data: [String: String]?
+}
+```
+
+Everything except the ID has a default, so pass only what you need. Swift wants the arguments in the order above — you can skip any of them, but you can't reorder the ones you keep.
+
+## Preview
+
+Sometimes you want the layout settled before the ad space exists, or you want to check a format still renders after upgrading the SDK. `AdBannerPreview` and `AdViewPreview` render a sample creative through the same renderer the real ads use.
+
+No ad request goes out, no ad space ID is involved, and `ADGEIST_APP_ID` doesn't need to be set. Nothing is reported either — no impressions, no clicks, no telemetry — so your live numbers stay clean.
+
+```swift
+AdBannerPreview(
+    type: .display,        // .banner | .display | .companion
+    media: .video,         // .image | .gif | .video
+    isResponsive: true,    // true fills and crops, false letterboxes
+    width: 300,
+    height: 250
+)
+```
+
+The UIKit version takes the same arguments and, like `AdView`, waits for `load()`. `onEvent` behaves as it does on the live components — an argument on `AdBannerPreview`, a property on `AdViewPreview`:
+
+```swift
+private let preview = AdViewPreview(
+    type: .display,        // .banner | .display | .companion
+    media: .video,         // .image | .gif | .video
+    isResponsive: true,    // true fills and crops, false letterboxes
+    width: 300,
+    height: 250
+)
+
+override func viewDidLoad() {
+    super.viewDidLoad()
+
+    preview.translatesAutoresizingMaskIntoConstraints = false
+    view.addSubview(preview)
+
+    NSLayoutConstraint.activate([
+        preview.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+        preview.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor)
+    ])
+
+    preview.load()
+}
+```
+
+Leave `creativeUrl` out and you get a bundled sample matched to your slot's aspect ratio. Point it at your own artwork when you have some:
+
+```swift
+AdBannerPreview(
+    type: .companion,
+    creativeUrl: "https://example.com/creative.mp4",   // 16:9 video for .companion
+    companionUrl: "https://example.com/banner.png",    // 16:3 image, .companion only
+    title: "Your headline",
+    description: "Your body copy",
+    ctaUrl: "https://example.com",
+    width: 300,
+    height: 250
+)
+```
+
+Media type comes from the file extension, so an `.mp4` plays as video without you saying so. `ctaUrl` and `deepLinkUrl` behave exactly as they do on a live ad: the deep link is tried first and the CTA is the fallback. Empty `title` and `description` fall back to placeholder copy written at the real character limits, which is the quickest way to see where your own text will overflow — banners render neither, so don't expect them there. `reserveSpace` exists only so the argument lists match the live components; it does nothing here.
+
+When the ad space is ready, delete the preview-only arguments, change the type and pass the ID. Everything about sizing and events stays put.
+
+```swift
+AdBannerPreview(type: .display, media: .video, width: 300, height: 250)
+AdBanner(adId: "YOUR_AD_SPACE_ID",              width: 300, height: 250)
+```
+
+```swift
+let preview = AdViewPreview(type: .display, media: .video, width: 300, height: 250)
+let adView  = AdView(adId: "YOUR_AD_SPACE_ID",             width: 300, height: 250)
+```
 
 ## Sizing
 
-| Parameter      | Purpose                                                        |
-| -------------- | -------------------------------------------------------------- |
-| `width`        | Fallback width, used only if the server returns no dimensions  |
-| `height`       | Fallback height, used only if the server returns no dimensions |
-| `reserveSpace` | Occupies the requested size until the ad resolves              |
+Pass the size of the slot you're filling. Leave an axis out and it fills its parent, so `height: 300` inside a `VStack` gives you a full-width ad 300 tall, and `width: 300` does the mirror image inside an `HStack`.
 
-Dimensions returned by the server always win. The `width` and `height` you pass are a fallback for the case where the response carries none.
+Server dimensions beat anything you pass. Treat `width` and `height` as a fallback for responses that don't carry their own, not as a demand.
 
-Each axis is independent: an axis without `width`/`height` fills its parent.
+By default the view has zero size until the ad resolves and then grows into place, which pushes whatever sits below it down the screen. When that matters, claim the space up front:
 
-> **Responsive ads:** In a `VStack` or vertical `ScrollView`, pass `height`. In an `HStack` or horizontal `ScrollView`, pass `width`.
+```swift
+AdBanner(
+    adId: "YOUR_AD_SPACE_ID",
+    width: 320,
+    height: 300,
+    reserveSpace: true
+)
+```
 
-With `reserveSpace: false` (the default) the view has zero size until the ad resolves, then grows to fit — surrounding content shifts. With `reserveSpace: true` the view claims the requested size immediately; any axis without a value fills its parent.
+If a non-responsive ad comes back with no dimensions and you passed none either, the ad fills its parent and you get an `AW1` warning. That's the SDK asking you for a size.
 
-If a non-responsive ad returns no dimensions and you passed no `width`/`height`, the ad fills its parent and the SDK emits an `AW1` warning.
+On the UIKit side, `AdView` reports its own intrinsic content size for fixed-size ads, so constrain where it sits rather than how big it is. For responsive ads, constrain the axes you didn't pass.
 
-## Ad events
+## Events
 
-Pass `onEvent` to receive ad events. It is optional and called on the main thread.
-
-### SwiftUI
+`onEvent` is optional and always called on the main thread.
 
 ```swift
 AdBanner(adId: "YOUR_AD_SPACE_ID", onEvent: { event in
@@ -224,31 +262,56 @@ AdBanner(adId: "YOUR_AD_SPACE_ID", onEvent: { event in
 })
 ```
 
-### UIKit
-
-Set `onEvent` before calling `load()`.
+In UIKit it's a property, and it needs to be set before `load()` runs:
 
 ```swift
 adView.onEvent = { event in
     print(event.code, event.type.rawValue, event.message)
 }
+
 adView.load()
 ```
 
-### Event payload
+Each event carries a `code` (`AE1` and friends), a `type` (`AdgeistEventType`), a human-readable `message`, and sometimes `data`, which holds `reason` on load failures. Branch on `code` or `type`. The message text can be localized and isn't stable, so it's for your logs, not your logic.
 
-| Field     | Type                | Description                              |
-| --------- | ------------------- | ---------------------------------------- |
-| `code`    | `String`            | SDK reference code, e.g. `AE1`           |
-| `type`    | `AdgeistEventType`  | Event kind, e.g. `AD_NO_FILL`            |
-| `message` | `String`            | Human-readable description               |
-| `data`    | `[String: String]?` | Extra details; `reason` on load failures |
+## When ads don't show up
 
-`data.reason` is the underlying error description, and its text may be localized. Use it for diagnostics only; match on `code` or `type`.
+Attach `onEvent`, print the code, and check it against this list. It's almost always one of them.
 
-Code prefixes: `AL` lifecycle, `AI` interaction, `AE` error, `AW` warning.
+**`AE1`** — no campaign is running for that ad space. Your integration is fine; hide the placement when you see it.
 
-### Event reference
+**`AW2`** — configuration. `ADGEIST_APP_ID` missing or wrong, bundle ID not whitelisted, or an ad space ID that doesn't exist.
+
+**`AE2`** — the request didn't complete. Device offline, timed out, or a server error.
+
+**`AW3`** — the creative didn't render. Send us the code and `data.reason`.
+
+**`AL1`, but still a blank space** — the ad loaded into a slot with no height. See [Sizing](#sizing).
+
+**No events at all** — `load()` never ran, or the view never made it into the window. UIKit needs the explicit call; SwiftUI handles it on appear.
+
+When you can't tell whether it's your layout or the delivery, render the same placement with a [preview](#preview). If the preview looks right, the layout is sound and the problem is on the request side.
+
+## Tracking authorisation
+
+Optional. Tracking authorisation improves targeting, and ads serve without it.
+
+```swift
+let authorised = await AdgeistCore.shared.requestAdTrackingAutorisation()
+```
+
+You get `true` when tracking is authorised. The system prompt only shows while the app is active and authorisation is still undetermined, and the status is resolved once per launch — so call it before your first ad loads or it won't count until next time. If your app already calls `ATTrackingManager.requestTrackingAuthorization` itself, don't call this; the SDK picks up whatever status you've set.
+
+Either way you need `NSUserTrackingUsageDescription` in `Info.plist`. iOS kills apps that touch AppTrackingTransparency without it.
+
+```xml
+<key>NSUserTrackingUsageDescription</key>
+<string>YOUR_REASON</string>
+```
+
+## Event reference
+
+Prefixes: `AL` lifecycle, `AI` interaction, `AE` error, `AW` warning.
 
 | Code | type               | Meaning                | When it occurs                  | Possible cause                                                   | Recommended action                            |
 | ---- | ------------------ | ---------------------- | ------------------------------- | ---------------------------------------------------------------- | --------------------------------------------- |
@@ -260,10 +323,10 @@ Code prefixes: `AL` lifecycle, `AI` interaction, `AE` error, `AW` warning.
 | AW2  | `AD_WARNING`       | Invalid configuration  | Before or during the ad request | Missing `ADGEIST_APP_ID`, or request rejected (HTTP 4xx)         | Check `Info.plist` and the ad space ID        |
 | AW3  | `AD_WARNING`       | Ad failed to render    | While rendering the creative    | Invalid creative or web view error                               | Contact support with `code` and `data.reason` |
 
-A load cancelled by a new `load()` call emits no event.
+A load cancelled by a newer `load()` call emits nothing.
 
 ---
 
 ## Support
 
-If you run into any difficulties while integrating or using the Adgeist Mobile Ads SDK, reach out to beast@thealteroffice.com and we'll help you get it sorted out.
+If you run into any difficulties while integrating or using the Adgeist Mobile Ads SDK, reach out to contact@thealteroffice.com and we'll help you get it sorted out.
