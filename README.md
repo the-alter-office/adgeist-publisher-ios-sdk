@@ -143,6 +143,7 @@ That's the whole surface, apart from these:
 ```swift
 AdgeistCore.shared.initialize()
 await AdgeistCore.shared.requestAdTrackingAutorisation()    // -> Bool
+AdgeistCore.shared.setUserDetails(userId:userName:email:phone:)   // all optional
 
 struct AdgeistEvent {
     let code: String            // "AE1" and friends
@@ -291,6 +292,23 @@ Attach `onEvent`, print the code, and check it against this list. It's almost al
 **No events at all** — `load()` never ran, or the view never made it into the window. UIKit needs the explicit call; SwiftUI handles it on appear.
 
 When you can't tell whether it's your layout or the delivery, render the same placement with a [preview](#preview). If the preview looks right, the layout is sound and the problem is on the request side.
+
+## User details
+
+Optional. Attach user details for targeted ads.
+
+```swift
+AdgeistCore.shared.setUserDetails(
+    userId: "12345",
+    userName: "Jane Doe",
+    email: "jane@example.com",
+    phone: "+91833838383"
+)
+```
+
+Every argument is optional, so pass only what you have. Phone numbers need the country code — `"+91833838383"`, not `"833838383"`.
+
+Call it when the user signs in, and again whenever one of the details changes. What you pass is remembered between launches, so once per sign-in is enough.
 
 ## Tracking authorisation
 
